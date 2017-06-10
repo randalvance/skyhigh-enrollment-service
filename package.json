@@ -19,6 +19,8 @@
   "homepage": "https://github.com/randalvance/skyhigh-enrollment-service#readme",
   "dependencies": {
     "amqplib": "^0.5.1",
+    "async": "^2.4.1",
+    "mongoose": "^4.10.5",
     "restify": "^4.3.0"
   }
 }
