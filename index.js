@@ -15,6 +15,13 @@ var server = restify.createServer({
     name: 'skyhigh.enrollment',
     version: '1.0.0'
 });
+server.use(
+    function crossOrigin(req, res, next) {
+        res.header("Access-Control-Allow-Origin", "*");
+        res.header("Access-Control-Allow-Headers", "X-Requested-With");
+        return next();
+    }
+);
 server.use(restify.acceptParser(server.acceptable));
 server.use(restify.queryParser());
 server.use(restify.bodyParser());
@@ -30,40 +37,60 @@ server.get('/api/subjects', function (req, res) {
     });
 });
 server.get('/api/enrollments', function (req, res) {
-    models.Enrollment.find({}, function (err, enrollments) {
+    models.Enrollment.find().populate('student subjects').exec(function (err, enrollments) {
         res.send(enrollments);
     });
 });
 server.post('/api/enrollments', function (req, res) {
     var enrollment = req.body;
-    var studentId, subjectIds;
+    var student = enrollment.student;
+    var subjects = enrollment.subjects;
 
     async.waterfall([
         function (callback) {
-            models.Student.findOne({ studentId: enrollment.studentId }, function (err, student) {
-                console.log(student);
-                studentId = new ObjectId(student._id);
-                callback(null, studentId);
+            var enrollment = new models.Enrollment({});
+            enrollment.save(function (err, enrollment) {
+                callback(null, enrollment);
             });
         },
-        function (studentId, callback) {
-            models.Subject.find({
-                subjectId: { $in: enrollment.subjectIds }
-            }, function (err, subjects) {
-                console.log(subjects);
-                subjectIds = subjects.map(subject => new ObjectId(subject.subjectId));
-                callback(null, subjectIds, studentId);
+        function (enrollment, callback) {
+            console.log(student.studentId);
+            models.Student.findOneAndUpdate({ studentId: student.studentId }, student, { upsert: true, setDefaultsOnInsert: true, new: true }, function (err, student) {
+                if (err) return res.send(500, { error: err });
+
+                enrollment.student = student._id;
+
+                student.enrollments.push(enrollment._id);
+                student.save(function (err, student) {
+                    callback(null, enrollment);
+                });
             });
         },
-        function (subjectIds, studentId, callback) {
-            var newEnrollment = new models.Enrollment({
-                student: studentId,
-                subjects: subjectIds
-            });
-
-            newEnrollment.save(function (err, enrollment) {
-                if (err) throw err;
-
+        function (enrollment, callback) {
+            async.each(subjects, function (subject, callback) {
+                async.waterfall([
+                    function (callback) {
+                        models.Subject.findOneAndUpdate({ subjectId: subject.subjectId }, subject, { upsert: true, setDefaultsOnInsert: true, new: true }, function(err, subject) {
+                            callback(null, subject);
+                        });
+                    },
+                    function (subject, callback) {
+                        subject.enrollments.push(enrollment._id);
+                        subject.save(function(err, subject) {
+                            callback(null, subject);
+                        });
+                    },
+                    function (subject, callback) {
+                        enrollment.subjects.push(subject._id);
+                        callback(null);
+                    }
+                ], function(err) {
+                    callback();
+                });
+            }, function (err) {
+                if (err) return res.send(500, { error: err });
+                
+                enrollment.save();
                 callback(null);
             });
         }
