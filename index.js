@@ -5,9 +5,12 @@ var async = require('async');
 
 var ObjectId = mongoose.Types.ObjectId;
 
+var mongoDbHostName = process.env.MONGO_HOSTNAME;
+var rabitMqHostName = process.env.RABBITMQ_HOSTNAME;
+
 // Replace depracated built-in MongoDb promise with native Promise
 mongoose.Promise = global.Promise;
-mongoose.connect('mongodb://mongo/skyhigh-enrollment');
+mongoose.connect('mongodb://' + mongoDbHostName + '/skyhigh-enrollment');
 
 var models = require('./models');
 
@@ -108,7 +111,7 @@ server.listen(3001, function () {
 
 // This is a hack for now, we need to wait for a few seconds for rabbitMQ to be ready
 setTimeout(function () {
-    amqp.connect('amqp://rabbitmq', function (err, conn) {
+    amqp.connect('amqp://' + rabitMqHostName, function (err, conn) {
         conn.createChannel(require('./channels/studentChannel'));
         conn.createChannel(require('./channels/subjectChannel'));
     });
