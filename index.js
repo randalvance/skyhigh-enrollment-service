@@ -7,7 +7,7 @@ var ObjectId = mongoose.Types.ObjectId;
 
 // Replace depracated built-in MongoDb promise with native Promise
 mongoose.Promise = global.Promise;
-mongoose.connect('mongodb://localhost/skyhigh-enrollment');
+mongoose.connect('mongodb://mongo/skyhigh-enrollment');
 
 var models = require('./models');
 
@@ -70,13 +70,13 @@ server.post('/api/enrollments', function (req, res) {
             async.each(subjects, function (subject, callback) {
                 async.waterfall([
                     function (callback) {
-                        models.Subject.findOneAndUpdate({ subjectId: subject.subjectId }, subject, { upsert: true, setDefaultsOnInsert: true, new: true }, function(err, subject) {
+                        models.Subject.findOneAndUpdate({ subjectId: subject.subjectId }, subject, { upsert: true, setDefaultsOnInsert: true, new: true }, function (err, subject) {
                             callback(null, subject);
                         });
                     },
                     function (subject, callback) {
                         subject.enrollments.push(enrollment._id);
-                        subject.save(function(err, subject) {
+                        subject.save(function (err, subject) {
                             callback(null, subject);
                         });
                     },
@@ -84,12 +84,12 @@ server.post('/api/enrollments', function (req, res) {
                         enrollment.subjects.push(subject._id);
                         callback(null);
                     }
-                ], function(err) {
+                ], function (err) {
                     callback();
                 });
             }, function (err) {
                 if (err) return res.send(500, { error: err });
-                
+
                 enrollment.save();
                 callback(null);
             });
@@ -102,12 +102,14 @@ server.post('/api/enrollments', function (req, res) {
     });
 });
 
-server.listen(3000, function () {
+server.listen(3001, function () {
     console.log('%s listening at %s', server.name, server.url);
 });
 
-
-amqp.connect('amqp://localhost', function (err, conn) {
-    conn.createChannel(require('./channels/studentChannel'));
-    conn.createChannel(require('./channels/subjectChannel'));
-});
+// This is a hack for now, we need to wait for a few seconds for rabbitMQ to be ready
+setTimeout(function () {
+    amqp.connect('amqp://rabbitmq', function (err, conn) {
+        conn.createChannel(require('./channels/studentChannel'));
+        conn.createChannel(require('./channels/subjectChannel'));
+    });
+}, 5000);
